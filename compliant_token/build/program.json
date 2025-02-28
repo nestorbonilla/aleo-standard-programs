@@ -1,6 +1,19 @@
 {
-    "program": "compliant_token.aleo",
-    "version": "0.0.0",
-    "description": "",
-    "license": "MIT"
+  "program": "compliant_token.aleo",
+  "version": "0.1.0",
+  "description": "",
+  "license": "MIT",
+  "network": "testnet",
+  "dependencies": [
+    {
+      "name": "credits.aleo",
+      "location": "network",
+      "network": "testnet"
+    },
+    {
+      "name": "token_registry.aleo",
+      "location": "network",
+      "network": "testnet"
+    }
+  ]
 }

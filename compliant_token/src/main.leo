@@ -10,6 +10,7 @@ program compliant_token.aleo {
   const BLOCKS_IN_A_DAY: u32 = 28_800u32; // Number of blocks per day for epoch-based calculations
   const MAX_SPEND_PER_DAY: u128 = 10_000_000_000u128; // Daily spending limit per user
   const MAX_U32: u32 = 4294967295u32; // Maximum value of a u32, used for transaction expiration
+  const LOCKED_TIME: u64 = 1714531200u64; // The time when the token will be locked
 
   // Record defining the spend limit for a user.
   record SpendLimit {
@@ -24,6 +25,26 @@ program compliant_token.aleo {
   // Mapping to track whether a user has an active spend limit.
   mapping has_spend_limit: field => bool;
 
+  record TokenLocked {
+    locked_time: u32,
+    owner: address
+  }
+
+
+  /**
+  * Admin can call this transition to lock the token at a specific time.
+  */
+  transition set_lock_time(
+    locked_time: u32,
+    recipient_address: address
+  ) -> TokenLocked {
+    assert_eq(self.caller, ADMIN_ADDRESS);
+    return TokenLocked {
+      locked_time: locked_time,
+      owner: recipient_address
+    };
+  }
+  
   /**
    * Initializes the compliant token by registering it with the token registry.
    * Can only be called by the ADMIN_ADDRESS.
@@ -115,8 +136,9 @@ program compliant_token.aleo {
     spend_limit: SpendLimit, // The user's spend limit record
     amount: u128, // Amount to transfer
     recipient: address, // Recipient address
-    public epoch: u32 // Current epoch
-  ) -> (SpendLimit, token_registry.aleo/Token, token_registry.aleo/Token, token_registry.aleo/Token, Future) {
+    public epoch: u32, // Current epoch
+    token_locked: TokenLocked
+    ) -> (SpendLimit, token_registry.aleo/Token, token_registry.aleo/Token, token_registry.aleo/Token, Future) {
     
     // Determine the updated amount spent based on the epoch
     let updated_amount_spent: u128 = spend_limit.epoch_spent < epoch 
@@ -154,13 +176,13 @@ program compliant_token.aleo {
       amount,
       prehook_output.1
     );
-
+    
     return (
       updated_spend_limit, // The updated spend limit record
       prehook_output.0,    // Remaining balance from authorization
       transfer_output.0,   // Remaining balance from transfer (should be 0)
       transfer_output.1,   // The token record sent to the recipient
-      finalize_transfer_private(prehook_output.2, transfer_output.2, epoch) // Await the finalization process
+      finalize_transfer_private(prehook_output.2, transfer_output.2, epoch, token_locked.locked_time) // Await the finalization process
     );
   }
 
@@ -170,12 +192,15 @@ program compliant_token.aleo {
   async function finalize_transfer_private(
     f0: Future, // Future from prehook_private
     f1: Future, // Future from transfer_private
-    epoch: u32
+    epoch: u32,
+    locked_time: u32
   ) {
     f0.await();
     f1.await();
 
     let current_epoch: u32 = block.height % BLOCKS_IN_A_DAY;
+    // Ensure the token is not locked
+    assert(current_epoch >= locked_time);
     assert_eq(epoch, current_epoch);
   }
 }
